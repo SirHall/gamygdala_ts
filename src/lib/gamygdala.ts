@@ -10,11 +10,10 @@ import { Relation } from "./relation";
 
 export class Gamygdala
 {
-    // TODO: This should be a Map<string, Agent>
     agents: Map<string, Agent> = new Map();
     goals: Map<string, Goal> = new Map();
     // Use applyDecay() instead!
-    private decayFunction: DecayFn = exponentialDecayFunction; // TODO: Figure out what this is
+    private decayFunction: DecayFn = exponentialDecayFunction;
     decayFactor: number = 0.8;
     lastMillis = Date.now();
     millisPassed: number = 0.0;
@@ -193,7 +192,6 @@ export class Gamygdala
     */
     public getAgentByName(agentName: string): Agent | undefined
     {
-        // TODO: Rewrite such that this.agents is a Map<string, Agent>
         return this.agents.get(agentName);
     }
 
