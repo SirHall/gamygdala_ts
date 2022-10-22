@@ -11,8 +11,8 @@ import { Relation } from "./relation";
 export class Gamygdala
 {
     // TODO: This should be a Map<string, Agent>
-    agents: Agent[] = [];
-    goals: Goal[] = [];
+    agents: Map<string, Agent> = new Map();
+    goals: Map<string, Goal> = new Map();
     // Use applyDecay() instead!
     private decayFunction: DecayFn = exponentialDecayFunction; // TODO: Figure out what this is
     decayFactor: number = 0.8;
@@ -121,7 +121,7 @@ export class Gamygdala
     */
     public printAllEmotions(gain: boolean): void
     {
-        for (const agent of this.agents)
+        for (const [agentName, agent] of this.agents)
         {
             agent.printEmotionalState(gain);
             agent.printRelations();
@@ -136,7 +136,7 @@ export class Gamygdala
     */
     public setGain(gain: number)
     {
-        for (const agent of this.agents)
+        for (const [agentName, agent] of this.agents)
             agent.setGain(gain);
     }
 
@@ -180,7 +180,7 @@ export class Gamygdala
     */
     public registerAgent(agent: Agent): void
     {
-        this.agents.push(agent);
+        this.agents.set(agent.name, agent);
         agent.gamygdalaInstance = this;
     }
 
@@ -194,7 +194,7 @@ export class Gamygdala
     public getAgentByName(agentName: string): Agent | undefined
     {
         // TODO: Rewrite such that this.agents is a Map<string, Agent>
-        return this.agents.find(agent => agent.name === agentName);
+        return this.agents.get(agentName);
     }
 
 
@@ -206,10 +206,10 @@ export class Gamygdala
     */
     public registerGoal(goal: Goal): void
     {
-        if (this.getGoalByName(goal.name) == null)
-            this.goals.push(goal);
-        else // TODO: We should not be logging this to the console!
-            console.log("Warning: failed adding a second goal with the same name: " + goal.name);
+        if (this.goals.has(goal.name))
+            throw new Error("Failed adding a second goal with the same name: " + goal.name);
+
+        this.goals.set(goal.name, goal);
     }
 
 
@@ -222,7 +222,7 @@ export class Gamygdala
     public getGoalByName(goalName: string): Goal | undefined
     {
         // TODO: Rewrite such that this.goals is a Map<string, Goal>
-        return this.goals.find(goal => goal.name === goalName);
+        return this.goals.get(goalName);
     }
 
 
@@ -249,7 +249,8 @@ export class Gamygdala
                 console.log("Error: the congruence list was not of the same length as the affected goal list");
                 return false; // The congruence list must be of the same length as the affected goals list.   
             }
-            if (this.goals.length == 0)
+
+            if (this.goals.size == 0)
             {
                 console.log("Warning: no goals registered to Gamygdala, all goals to be considered in appraisal need to be registered.");
                 return false; // No goals registered to GAMYGDALA.   
@@ -271,40 +272,42 @@ export class Gamygdala
                     if (this.debug)
                         console.log('Evaluated goal: ' + currentGoal.name + '(' + utility + ', ' + deltaLikelihood + ')');
 
-
                     //now find the owners, and update their emotional states
-                    for (var j = 0; j < this.agents.length; j++)
-                    {
-                        if (this.agents[j].hasGoal(currentGoal.name))
-                        {
-                            var owner = this.agents[j];
 
-                            if (this.debug)
-                                console.log('....owned by ' + owner.name);
-                            this.evaluateInternalEmotion(utility, deltaLikelihood, currentGoal.likelihood, owner);
-                            this.agentActions(owner.name, belief.causalAgentName, owner.name, desirability, utility, deltaLikelihood);
-                            //now check if anyone has a relation to this goal owner, and update the social emotions accordingly.
-                            for (var k = 0; k < this.agents.length; k++)
+                    for (const [ownerAgentName, ownerAgent] of this.agents)
+                    {
+                        if (!ownerAgent.hasGoal(currentGoal.name))
+                            continue;
+
+                        if (this.debug)
+                            console.log('....owned by ' + ownerAgent.name);
+
+                        this.evaluateInternalEmotion(utility, deltaLikelihood, currentGoal.likelihood, ownerAgent);
+                        this.agentActions(ownerAgent.name, belief.causalAgentName, ownerAgent.name, desirability, utility, deltaLikelihood);
+
+                        // Now check if anyone has a relation to this goal owner, and update the social emotions accordingly.
+                        for (const [targetAgentName, targetAgent] of this.agents)
+                        {
+                            var relation = targetAgent.getRelation(ownerAgent.name);
+                            if (relation != null)
                             {
-                                var relation = this.agents[k].getRelation(owner.name);
-                                if (relation != null)
+                                if (this.debug)
                                 {
-                                    if (this.debug)
-                                    {
-                                        console.log(this.agents[k].name + ' has a relationship with ' + owner.name);
-                                        console.log(relation);
-                                    }
-                                    //The agent has relationship with the goal owner which has nonzero utility, add relational effects to the relations for agent[k]. 
-                                    this.evaluateSocialEmotion(utility, desirability, deltaLikelihood, relation, this.agents[k]);
-                                    //also add remorse and gratification if conditions are met within (i.e., agent[k] did something bad/good for owner)
-                                    this.agentActions(owner.name, belief.causalAgentName, this.agents[k].name, desirability, utility, deltaLikelihood);
-                                } else
-                                {
-                                    if (this.debug)
-                                        console.log(this.agents[k].name + ' has NO relationship with ' + owner.name);
+                                    console.log(targetAgent.name + ' has a relationship with ' + ownerAgent.name);
+                                    console.log(relation);
                                 }
+
+                                // The agent has relationship with the goal owner which has nonzero utility, add relational effects to the relations for agent[k]. 
+                                this.evaluateSocialEmotion(utility, desirability, deltaLikelihood, relation, targetAgent);
+                                // Also add remorse and gratification if conditions are met within (i.e., agent[k] did something bad/good for owner)
+                                this.agentActions(ownerAgent.name, belief.causalAgentName, targetAgent.name, desirability, utility, deltaLikelihood);
+                            } else
+                            {
+                                if (this.debug)
+                                    console.log(targetAgent.name + ' has NO relationship with ' + ownerAgent.name);
                             }
                         }
+
                     }
                 }
             }
@@ -328,24 +331,24 @@ export class Gamygdala
                 this.evaluateInternalEmotion(utility, deltaLikelihood, currentGoal.likelihood, owner);
                 this.agentActions(owner.name, belief.causalAgentName, owner.name, desirability, utility, deltaLikelihood);
                 //now check if anyone has a relation to this goal owner, and update the social emotions accordingly.
-                for (var k = 0; k < this.agents.length; k++)
+                for (const [agentName, agent] of this.agents)
                 {
-                    var relation = this.agents[k].getRelation(owner.name);
+                    var relation = agent.getRelation(owner.name);
                     if (relation != null)
                     {
                         if (this.debug)
                         {
-                            console.log(this.agents[k].name + ' has a relationship with ' + owner.name);
+                            console.log(agent.name + ' has a relationship with ' + owner.name);
                             console.log(relation);
                         }
                         //The agent has relationship with the goal owner which has nonzero utility, add relational effects to the relations for agent[k]. 
-                        this.evaluateSocialEmotion(utility, desirability, deltaLikelihood, relation, this.agents[k]);
+                        this.evaluateSocialEmotion(utility, desirability, deltaLikelihood, relation, agent);
                         //also add remorse and gratification if conditions are met within (i.e., agent[k] did something bad/good for owner)
-                        this.agentActions(owner.name, belief.causalAgentName, this.agents[k].name, desirability, utility, deltaLikelihood);
+                        this.agentActions(owner.name, belief.causalAgentName, agent.name, desirability, utility, deltaLikelihood);
                     } else
                     {
                         if (this.debug)
-                            console.log(this.agents[k].name + ' has NO relationship with ' + owner.name);
+                            console.log(agent.name + ' has NO relationship with ' + owner.name);
                     }
                 }
             }

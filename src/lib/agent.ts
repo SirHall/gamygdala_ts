@@ -6,15 +6,15 @@ import { Relation } from "./relation";
 
 export class Agent
 {
-    // TODO: Should be a Map<string, Goal>
-    goals: Goal[] = [];
-    currentRelations: Relation[] = [];
+    goals: Map<string, Goal> = new Map();
+    currentRelations: Map<string, Relation> = new Map();
     internalState: Emotion[] = [];
     gain: number = 1;
     gamygdalaInstance?: Gamygdala;
 
     mapPAD: Map<string, PAD> = new Map(
         [
+            // The base set provided with Gamygdala
             ["distress", [-0.61, 0.28, -0.36]],
             ["fear", [-0.64, 0.6, -0.43]],
             ["hope", [0.51, 0.23, 0.14]],
@@ -31,6 +31,20 @@ export class Agent
             ["anger", [-0.51, 0.59, 0.25]],
             ["gratification", [0.69, 0.57, 0.63]], // Triumphant
             ["remorse", [-0.57, 0.28, -0.34]], // Guilty
+
+            // Extended from "external sources"
+
+            // http://www.kaaj.com/psych/scales/emotion.html
+            ["bored", [-.65, -.62, -.33]],
+            ["curious", [.22, .62, -.01]],
+            ["dignified", [.55, .22, .61]],
+            ["elated", [.50, .42, .23]],
+            ["inhibited", [-.54, -.04, -.41]],
+            ["loved", [.87, .54, -.18]],
+            ["puzzled", [-.41, .48, -.33]],
+            ["sleepy", [.20, -.70, -.44]],
+            ["unconcerned", [-.13, -.41, .08]],
+            ["violent", [-.50, .62, .38]],
         ]
     );
 
@@ -53,7 +67,7 @@ export class Agent
     {
         // no copy, cause we need to keep the ref,
         // one goal can be shared between agents so that changes to this one goal are reflected in the emotions of all agents sharing the same goal
-        this.goals.push(goal);
+        this.goals.set(goal.name, goal);
     }
 
     /**
@@ -64,15 +78,7 @@ export class Agent
     */
     private removeGoal(goalName: string): boolean
     {
-        for (var i = 0; i < this.goals.length; i++)
-        {
-            if (this.goals[i].name === goalName)
-            {
-                this.goals.splice(i, 1);
-                return true;
-            }
-        }
-        return false;
+        return this.goals.delete(goalName);
     }
 
     /**
@@ -94,7 +100,7 @@ export class Agent
     */
     public getGoalByName(goalName: string): Goal | undefined
     {
-        return this.goals.find(goal => goal.name === goalName);
+        return this.goals.get(goalName);
     }
 
     /**
@@ -210,25 +216,22 @@ export class Agent
     /**
     * Sets the relation this agent has with the agent defined by agentName. If the relation does not exist, it will be created, otherwise it will be updated.
     * @method TUDelft.Gamygdala.Agent.updateRelation
-    * @param {String} agentName The agent who is the target of the relation.
+    * @param {String} targetAgentName The agent who is the target of the relation.
     * @param {double} like The relation (between -1 and 1).
     */
-    public updateRelation(agentName: string, like: number)
+    public updateRelation(targetAgentName: string, like: number)
     {
         // This relation does not exist, just add it.
-        if (!this.hasRelationWith(agentName))
+        if (!this.hasRelationWith(targetAgentName))
         {
-            this.currentRelations.push(new Relation(agentName, like));
+            this.currentRelations.set(targetAgentName, new Relation(targetAgentName, like));
             return;
         }
 
         //The relation already exists, update it.
-        for (let i = 0; i < this.currentRelations.length; i++)
-        {
-            if (this.currentRelations[i].agentName === agentName)
-                this.currentRelations[i].like = like;
-        }
-
+        let relation = this.getRelation(targetAgentName);
+        if (relation != null)
+            relation.like = like;
     }
 
     /**
@@ -239,18 +242,17 @@ export class Agent
     */
     public hasRelationWith(agentName: string): boolean
     {
-        return (this.getRelation(agentName) != null);
+        return this.currentRelations.has(agentName);
     }
 
     /**
     * Returns the relation object this agent has with the agent defined by agentName.
     * @method TUDelft.Gamygdala.Agent.getRelation
-    * @param {String} agentName The agent who is the target of the relation.
+    * @param {String} targetAgentName The agent who is the target of the relation.
     */
-    public getRelation(agentName: string): Relation | undefined
+    public getRelation(targetAgentName: string): Relation | undefined
     {
-        // TODO: Maybe make currentRelations a Map<string, Relation> - mapping from agent name to relation
-        return this.currentRelations.find(relation => relation.agentName === agentName);
+        return this.currentRelations.get(targetAgentName);
     }
 
     /**
@@ -262,24 +264,15 @@ export class Agent
     {
         var output = this.name + ' has the following sentiments:\n   ';
         var i;
-        var found = false;
-        for (i = 0; i < this.currentRelations.length; i++)
-        {
 
-            if (agentName == null || this.currentRelations[i].agentName === agentName)
-            {
-                for (var j = 0; j < this.currentRelations[i].emotionList.length; j++)
-                {
-                    output += this.currentRelations[i].emotionList[j].name + '(' + this.currentRelations[i].emotionList[j].intensity + ') ';
-                    found = true;
-                }
-            }
-            output += ' for ' + this.currentRelations[i].agentName;
-            if (i < this.currentRelations.length - 1)
-                output += ', and\n   ';
-        }
-        if (found)
-            console.log(output);
+        let opinionsText = Array.from(this.currentRelations.entries())
+            .filter(([targetName]) => agentName == null ? true : targetName === agentName)
+            .map(([targetName, relation]) =>
+                `${relation.emotionList.map(emotion => `${emotion.name}(${emotion.intensity}) `)} for ${targetName}`
+            ).join(", and\n    ");
+
+        if (opinionsText.length > 0) // There is atleast one character generated
+            console.log(output + opinionsText);
     }
 
     /**
@@ -303,7 +296,7 @@ export class Agent
                 this.internalState[i].intensity = newIntensity;
         }
 
-        for (let i = 0; i < this.currentRelations.length; i++)
-            this.currentRelations[i].decay(gamygdalaInstance);
+        for (const [targetName, relation] of this.currentRelations)
+            relation.decay(gamygdalaInstance);
     }
 }

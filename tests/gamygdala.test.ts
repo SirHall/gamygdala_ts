@@ -24,7 +24,4 @@ test("Example execution loop", () =>
     engine.applyDecay(1);
     engine.appraise(new Belief(0.1, bob, ["survive"], [-0.2], true));
     engine.applyDecay(1);
-
-    engine.printAllEmotions(false);
-
 });
