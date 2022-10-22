@@ -200,17 +200,16 @@ export class Agent
     * @method TUDelft.Gamygdala.Agent.printEmotionalState
     * @param {boolean} useGain Whether to use the gain function or not.
     */
-    public printEmotionalState(useGain: boolean): void
+    public printEmotionalState(useGain: boolean): string 
     {
         let output = this.name + ' feels ';
         const emotionalState = this.getEmotionalState(useGain);
 
         let i;
         for (i = 0; i < emotionalState.length; i++)
-            output += emotionalState[i].name + ":" + emotionalState[i].intensity + ", ";
+            output += emotionalState[i].name + ":" + emotionalState[i].intensity + " ";
 
-        if (i > 0)
-            console.log(output);
+        return i > 0 ? output : "";
     };
 
     /**
@@ -260,19 +259,16 @@ export class Agent
     * @method TUDelft.Gamygdala.Agent.printRelations
     * @param {String} [agentName] The agent who is the target of the relation will only be printed, or when omitted all relations are printed.
     */
-    public printRelations(agentName?: string): void
+    public printRelations(agentName?: string): string
     {
-        var output = this.name + ' has the following sentiments:\n   ';
-        var i;
-
         let opinionsText = Array.from(this.currentRelations.entries())
-            .filter(([targetName]) => agentName == null ? true : targetName === agentName)
+            .filter(([targetName, relation]) => relation.emotionList.length > 0 && (agentName == null ? true : targetName === agentName))
             .map(([targetName, relation]) =>
-                `${relation.emotionList.map(emotion => `${emotion.name}(${emotion.intensity}) `)} for ${targetName}`
-            ).join(", and\n    ");
+                `-> ${targetName}: ${relation.emotionList.map(emotion => `${emotion.name}(${emotion.intensity})`).join(" ")}`
+            ).join("\n    ");
 
-        if (opinionsText.length > 0) // There is atleast one character generated
-            console.log(output + opinionsText);
+        // There is atleast one character generated
+        return opinionsText.length > 0 ? `${this.name} has the following sentiments:\n    ${opinionsText}` : "";
     }
 
     /**

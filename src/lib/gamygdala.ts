@@ -65,7 +65,7 @@ export class Gamygdala
 
         if (tempGoal == null)
         {
-            tempGoal = new Goal(goalName, goalUtility);
+            tempGoal = new Goal(goalName, goalUtility, isMaintenanceGoal);
             this.registerGoal(tempGoal);
         }
 
@@ -118,13 +118,12 @@ export class Gamygdala
     * @method TUDelft.Gamygdala.printAllEmotions
     * @param {boolean} gain Whether you want to print the gained (true) emotional states or non-gained (false).
     */
-    public printAllEmotions(gain: boolean): void
+    public printAllEmotions(gain: boolean = false): string
     {
-        for (const [agentName, agent] of this.agents)
-        {
-            agent.printEmotionalState(gain);
-            agent.printRelations();
-        }
+        return Array.from(this.agents.entries
+            ()).map(
+                ([name, agent]) => `${agent.printEmotionalState(gain)}\n${agent.printRelations()}`
+            ).join("\n\n");
     }
 
     /**
@@ -317,7 +316,7 @@ export class Gamygdala
                 //Loop through every goal in the list of affected goals by this event.
                 var currentGoal = affectedAgent.getGoalByName(belief.affectedGoalNames[i]);
                 if (currentGoal == null)
-                    throw new Error(`Could not find a currentGoal of name '${belief.affectedGoalNames[i]}'`);
+                    continue;
                 var utility = currentGoal.utility;
                 var deltaLikelihood = this.calculateDeltaLikelihood(currentGoal, belief.goalCongruences[i], belief.likelihood, belief.isIncremental);
                 //var desirability = belief.goalCongruences[i] * utility;
