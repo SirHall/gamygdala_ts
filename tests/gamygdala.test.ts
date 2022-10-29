@@ -74,7 +74,7 @@ test("Larger example", () =>
 
     // Duncan spilled some coffee on Macbeth!
     engine.appraise(
-        new Belief(0.95, duncan, ["boss", "code", "make-coffee", "converse"], [-0.1, -0.06, -1.0, -0.5]),
+        new Belief(0.98, duncan, ["boss", "code", "make-coffee", "converse"], [-0.1, -0.06, -1.0, -0.5]),
         engine.getAgentByName(macbeth)
     );
 

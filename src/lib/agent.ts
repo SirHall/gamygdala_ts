@@ -3,6 +3,7 @@ import { Emotion } from "./emotion";
 import { Gamygdala, PAD } from "./gamygdala";
 import { Goal } from "./goal";
 import { Relation } from "./relation";
+import { MaxHeap } from "mnemonist";
 
 export class Agent
 {
@@ -11,6 +12,9 @@ export class Agent
     internalState: Emotion[] = [];
     gain: number = 1;
     gamygdalaInstance?: Gamygdala;
+
+    // TODO: Implement value-loss-over-time field, that will decrease a Belief's value based on its age
+    memory: MaxHeap<Belief> = new MaxHeap();
 
     mapPAD: Map<string, PAD> = new Map(
         [
@@ -31,20 +35,6 @@ export class Agent
             ["anger", [-0.51, 0.59, 0.25]],
             ["gratification", [0.69, 0.57, 0.63]], // Triumphant
             ["remorse", [-0.57, 0.28, -0.34]], // Guilty
-
-            // Extended from "external sources"
-
-            // http://www.kaaj.com/psych/scales/emotion.html
-            ["bored", [-.65, -.62, -.33]],
-            ["curious", [.22, .62, -.01]],
-            ["dignified", [.55, .22, .61]],
-            ["elated", [.50, .42, .23]],
-            ["inhibited", [-.54, -.04, -.41]],
-            ["loved", [.87, .54, -.18]],
-            ["puzzled", [-.41, .48, -.33]],
-            ["sleepy", [.20, -.70, -.44]],
-            ["unconcerned", [-.13, -.41, .08]],
-            ["violent", [-.50, .62, .38]],
         ]
     );
 
@@ -251,6 +241,8 @@ export class Agent
     */
     public getRelation(targetAgentName: string): Relation | undefined
     {
+        if (!this.currentRelations.has(targetAgentName))
+            this.currentRelations.set(targetAgentName, new Relation(targetAgentName, 0.0));
         return this.currentRelations.get(targetAgentName);
     }
 
@@ -284,7 +276,7 @@ export class Agent
     {
         for (let i = 0; i < this.internalState.length; i++)
         {
-            var newIntensity = gamygdalaInstance.applyDecay((this.internalState[i].intensity ?? 0));
+            let newIntensity = gamygdalaInstance.applyDecay((this.internalState[i].intensity ?? 0));
 
             if (newIntensity < 0)
                 this.internalState.splice(i, 1);

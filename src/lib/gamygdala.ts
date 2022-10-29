@@ -91,10 +91,10 @@ export class Gamygdala
         const source = this.getAgentByName(sourceName);
         const target = this.getAgentByName(targetName);
 
-        if (source && target && relation >= -1 && relation <= 1)
-            source.updateRelation(targetName, relation);
-        else // TODO: This should not be printed, but properly thrown
-            console.log('Error: cannot relate ' + source + '  to ' + target + ' with intensity ' + relation);
+        if (source == null || target == null || relation < -1.0 || relation > 1.0)
+            throw new Error('Error: cannot relate ' + source + '  to ' + target + ' with intensity ' + relation);
+
+        source.updateRelation(targetName, relation);
     }
 
 
@@ -231,134 +231,72 @@ export class Gamygdala
     * Gamygdala assumes that the affectedAgent is indeed the only goal owner affected, that the belief is well-formed, and will not perform any checks, nor use Gamygdala's list of known goals to find other agents that share this goal (!!!)
     * @method TUDelft.Gamygdala.appraise 
     * @param {TUDelft.Gamygdala.Belief} belief The current event, in the form of a Belief object, to be appraised
-    * @param {TUDelft.Gamygdala.Agent} [affectedAgent] The reference to the agent who needs to appraise the event. If given, this is the appraisal perspective (see explanation above).
+    * @param {TUDelft.Gamygdala.Agent} [targetAgent] The reference to the agent who needs to appraise the event. If given, this is the appraisal perspective (see explanation above).
     */
-    public appraise(belief: Belief, affectedAgent?: Agent)
+    public appraise(belief: Belief, targetAgent?: Agent, witnesses?: Agent[])
     {
-        if (affectedAgent == null)
+        // If 'affectedAgent' is not in witnesses, then the agent doesn't know it happened to them!
+
+        const spectators = witnesses ?? this.agents.values();
+
+        const allAreAffected = targetAgent == null;
+
+        // Now check if anyone has a relation to this goal owner, and update the social emotions accordingly.
+        for (let i = 0; i < belief.affectedGoalNames.length; i++)
         {
-            //check all
-            if (this.debug)
-                console.log(belief);
+            let currentGoal: Goal | undefined;
+            let utility = 0.0;
+            let deltaLikelihood = 0.0;
+            let newLikelihood = 0.0;
+            let desirability = 0.0;
 
-            if (belief.goalCongruences.length != belief.affectedGoalNames.length)
+            // TODO: May want to follow DRY here!
+            if (!allAreAffected)
             {
-                console.log("Error: the congruence list was not of the same length as the affected goal list");
-                return false; // The congruence list must be of the same length as the affected goals list.   
-            }
-
-            if (this.goals.size == 0)
-            {
-                console.log("Warning: no goals registered to Gamygdala, all goals to be considered in appraisal need to be registered.");
-                return false; // No goals registered to GAMYGDALA.   
-            }
-
-
-            for (var i = 0; i < belief.affectedGoalNames.length; i++)
-            {
-                //Loop through every goal in the list of affected goals by this event.
-                var currentGoal = this.getGoalByName(belief.affectedGoalNames[i]);
-
-                if (currentGoal != null)
+                // We only need to do desirability calculations for the single affected target
+                for (let i = 0; i < belief.affectedGoalNames.length; i++)
                 {
-                    //the goal exists, appraise it
-                    var utility = currentGoal.utility;
-                    var deltaLikelihood = this.calculateDeltaLikelihood(currentGoal, belief.goalCongruences[i], belief.likelihood, belief.isIncremental);
-                    //var desirability = belief.goalCongruences[i] * utility;
-                    var desirability = deltaLikelihood * utility;
-                    if (this.debug)
-                        console.log('Evaluated goal: ' + currentGoal.name + '(' + utility + ', ' + deltaLikelihood + ')');
-
-                    //now find the owners, and update their emotional states
-
-                    for (const [ownerAgentName, ownerAgent] of this.agents)
-                    {
-                        if (!ownerAgent.hasGoal(currentGoal.name))
-                            continue;
-
-                        if (this.debug)
-                            console.log('....owned by ' + ownerAgent.name);
-
-                        this.evaluateInternalEmotion(utility, deltaLikelihood, currentGoal.likelihood, ownerAgent);
-                        this.agentActions(ownerAgent.name, belief.causalAgentName, ownerAgent.name, desirability, utility, deltaLikelihood);
-
-                        // Now check if anyone has a relation to this goal owner, and update the social emotions accordingly.
-                        for (const [targetAgentName, targetAgent] of this.agents)
-                        {
-                            var relation = targetAgent.getRelation(ownerAgent.name);
-                            if (relation != null)
-                            {
-                                if (this.debug)
-                                {
-                                    console.log(targetAgent.name + ' has a relationship with ' + ownerAgent.name);
-                                    console.log(relation);
-                                }
-
-                                // The agent has relationship with the goal owner which has nonzero utility, add relational effects to the relations for agent[k]. 
-                                this.evaluateSocialEmotion(utility, desirability, deltaLikelihood, relation, targetAgent);
-                                // Also add remorse and gratification if conditions are met within (i.e., agent[k] did something bad/good for owner)
-                                this.agentActions(ownerAgent.name, belief.causalAgentName, targetAgent.name, desirability, utility, deltaLikelihood);
-                            } else
-                            {
-                                if (this.debug)
-                                    console.log(targetAgent.name + ' has NO relationship with ' + ownerAgent.name);
-                            }
-                        }
-
-                    }
+                    currentGoal = targetAgent?.getGoalByName(belief.affectedGoalNames[i]);
+                    if (currentGoal == null)
+                        continue;
+                    utility = currentGoal.utility;
+                    [deltaLikelihood, newLikelihood] = this.calculateDeltaLikelihood(currentGoal, belief.goalCongruences[i], belief.likelihood, belief.isIncremental);
+                    desirability = deltaLikelihood * utility;
                 }
             }
-        } else
-        {
-            // Check only affectedAgent (which can be much faster) and does not involve console output nor checks
-            for (var i = 0; i < belief.affectedGoalNames.length; i++)
+
+
+            for (const spectator of spectators)
             {
-                //Loop through every goal in the list of affected goals by this event.
-                var currentGoal = affectedAgent.getGoalByName(belief.affectedGoalNames[i]);
-                if (currentGoal == null)
+                const affected = (allAreAffected ? spectator : targetAgent)!;
+
+                // Check only affectedAgent (which can be much faster) and does not involve console output nor checks
+
+                // We need to do desirability calculations for each witness
+                if (allAreAffected)
+                {
+                    // Loop through every goal in the list of affected goals by this event.
+                    currentGoal = affected.getGoalByName(belief.affectedGoalNames[i]);
+                    if (currentGoal == null)
+                        continue;
+                    utility = currentGoal.utility;
+                    [deltaLikelihood, newLikelihood] = this.calculateDeltaLikelihood(currentGoal, belief.goalCongruences[i], belief.likelihood, belief.isIncremental);
+                    desirability = deltaLikelihood * utility;
+                }
+
+                if (Math.abs(desirability) < 0.001)
                     continue;
-                var utility = currentGoal.utility;
-                var deltaLikelihood = this.calculateDeltaLikelihood(currentGoal, belief.goalCongruences[i], belief.likelihood, belief.isIncremental);
-                //var desirability = belief.goalCongruences[i] * utility;
-                var desirability = deltaLikelihood * utility;
-                //assume affectedAgent is the only owner to be considered in this appraisal round.
 
-                var owner = affectedAgent;
+                this.appraiseAffectedWithWitness(affected, spectator, belief.causalAgentName, desirability, utility, deltaLikelihood, newLikelihood);
 
-                this.evaluateInternalEmotion(utility, deltaLikelihood, currentGoal.likelihood, owner);
-                this.agentActions(owner.name, belief.causalAgentName, owner.name, desirability, utility, deltaLikelihood);
-                //now check if anyone has a relation to this goal owner, and update the social emotions accordingly.
-                for (const [agentName, agent] of this.agents)
-                {
-                    var relation = agent.getRelation(owner.name);
-                    if (relation != null)
-                    {
-                        if (this.debug)
-                        {
-                            console.log(agent.name + ' has a relationship with ' + owner.name);
-                            console.log(relation);
-                        }
-                        //The agent has relationship with the goal owner which has nonzero utility, add relational effects to the relations for agent[k]. 
-                        this.evaluateSocialEmotion(utility, desirability, deltaLikelihood, relation, agent);
-                        //also add remorse and gratification if conditions are met within (i.e., agent[k] did something bad/good for owner)
-                        this.agentActions(owner.name, belief.causalAgentName, agent.name, desirability, utility, deltaLikelihood);
-                    } else
-                    {
-                        if (this.debug)
-                            console.log(agent.name + ' has NO relationship with ' + owner.name);
-                    }
-                }
+                if (allAreAffected)
+                    currentGoal!.likelihood = newLikelihood;
             }
-        }
 
-        //print the emotions to the console for debugging
-        if (this.debug)
-        {
-            this.printAllEmotions(false);
-            //this.printAllEmotions(true);
+            if (!allAreAffected)
+                currentGoal!.likelihood = newLikelihood;
         }
     }
-
 
     /**
     * This method decays for all registered agents the emotional state and relations. It performs the decay according to the time passed, so longer intervals between consecutive calls result in bigger clunky steps.
@@ -381,46 +319,59 @@ export class Gamygdala
     ////////////////////////////////////////////////////////
 
 
-    private calculateDeltaLikelihood(goal: Goal, congruence: number, likelihood: number, isIncremental?: boolean): number
+    private appraiseAffectedWithWitness(affected: Agent, spectator: Agent, causalAgentName: string, desirability: number, utility: number, deltaLikelihood: number, likelihood: number)
+    {
+
+        if (spectator.name === affected.name)
+            this.evaluateInternalEmotion(utility, deltaLikelihood, likelihood, affected);
+
+        this.agentActions(affected.name, causalAgentName, spectator.name, desirability, utility, deltaLikelihood);
+    }
+
+    private calculateDeltaLikelihood(goal: Goal, congruence: number, likelihood: number, isIncremental?: boolean): [number, number]
     {
         // Defines the change in a goal's likelihood due to the congruence and likelihood of a current event.
         // We cope with two types of beliefs: incremental and absolute beliefs. Incrementals have their likelihood added to the goal, absolute define the current likelihood of the goal
         // And two types of goals: maintenance and achievement. If an achievement goal (the default) is -1 or 1, we can't change it any more (unless externally and explicitly by changing the goal.likelihood).
-        var oldLikelihood = goal.likelihood;
-        var newLikelihood;
-        if (goal.isMaintenanceGoal == false && (oldLikelihood >= 1 || oldLikelihood <= -1))
-            return 0;
+        let oldLikelihood = goal.likelihood;
+        let newLikelihood;
+        if (!goal.isMaintenanceGoal && (oldLikelihood >= 1 || oldLikelihood <= -1))
+            return [0, oldLikelihood];
 
         if (goal.calculateLikelyhood !== false)
         {
             // If the goal has an associated function to calculate the likelyhood that the goal is true, then use that function, 
             newLikelihood = goal.calculateLikelyhood();
-        } else
+        }
+        else
         {
             // Otherwise use the event encoded updates.
             newLikelihood = isIncremental === true ?
-                Math.max(Math.min(oldLikelihood + likelihood * congruence, 1), -1) :
+                Math.max(Math.min(oldLikelihood + likelihood * congruence, 1.0), -1.0) :
                 (congruence * likelihood + 1.0) / 2.0;
         }
 
-        goal.likelihood = newLikelihood;
-
-        return oldLikelihood != null ? newLikelihood - oldLikelihood : newLikelihood;
+        return [oldLikelihood != null ? newLikelihood - oldLikelihood : newLikelihood, newLikelihood];
 
     }
 
     evaluateInternalEmotion(utility: number, deltaLikelihood: number, likelihood: number, agent: Agent)
     {
-        //This method evaluates the event in terms of internal emotions that do not need relations to exist, such as hope, fear, etc..
+        // This method evaluates the event in terms of internal emotions that do not need relations to exist, such as hope, fear, etc..
 
         var emotions = [];
 
         let positive = utility >= 0 ? deltaLikelihood >= 0 : deltaLikelihood < 0;
 
-        if (likelihood > 0 && likelihood < 1)
+        // TODO: Allow this to be determined by an agent's personality/temperament
+        let confirmedThreshold = 0.95;
+        let debunkedThreshold = 0.05;
+
+        if (likelihood > debunkedThreshold && likelihood < confirmedThreshold)
         {
-            emotions.push(positive === true ? "hope" : "fear");
-        } else if (likelihood === 1)
+            emotions.push(positive ? "hope" : "fear");
+        }
+        else if (likelihood >= confirmedThreshold)
         {
             if (utility >= 0)
             {
@@ -434,14 +385,16 @@ export class Gamygdala
                     emotions.push('fear-confirmed');
                 emotions.push('distress');
             }
-        } else if (likelihood === 0)
+        }
+        else if (likelihood <= debunkedThreshold)
         {
             if (utility >= 0)
             {
                 if (deltaLikelihood > 0.5)
                     emotions.push('disappointment');
                 emotions.push('distress');
-            } else
+            }
+            else
             {
                 if (deltaLikelihood > 0.5)
                     emotions.push('relief');
@@ -452,110 +405,93 @@ export class Gamygdala
         let intensity = Math.abs(utility * deltaLikelihood);
 
         if (intensity != 0)
-        {
             for (const emotion of emotions)
                 agent.updateEmotionalState(new Emotion(emotion, intensity));
-        }
     }
 
-    private evaluateSocialEmotion(utility: number, desirability: number, deltaLikelihood: number, relation: Relation, agent: Agent)
+    private agentActions(affectedName: string | undefined, causalName: string, selfName: string, desirability: number, utility: number, deltaLikelihood: number): void
     {
-        // This function is used to evaluate happy-for, pity, gloating or resentment.
-        // Emotions that arise when we evaluate events that affect goals of others.
-        // The desirability is the desirability from the goal owner's perspective.
-        // The agent is the agent getting evaluated (the agent that gets the social emotion added to his emotional state).
-        // The relation is a relation object between the agent being evaluated and the goal owner of the affected goal.
-        var emotion = new Emotion(undefined, undefined);
 
-        emotion.name = desirability >= 0 ?
-            (relation.like >= 0 ? 'happy-for' : 'resentment') :
-            (relation.like >= 0 ? 'pity' : 'gloating');
+        const me = this.getAgentByName(selfName);
 
-        emotion.intensity = Math.abs(utility * deltaLikelihood * relation.like);
+        /** My opinion of the affected agent */
+        const relationWithAffected = affectedName != null ? me?.getRelation(affectedName) : undefined;
+        const opinionOfAffected = relationWithAffected?.like ?? 0;
+        const iLikeAffected = opinionOfAffected >= 0.0;
 
-        if (emotion.intensity != 0)
+        /** My opinion of the causal agent */
+        const relationWithCausal = me?.getRelation(causalName);
+        const opinionOfCausal = relationWithCausal?.like ?? 0;
+        const iLikeCausal = opinionOfCausal >= 0.0;
+
+        /** If this event is desirable for affected agent */
+        const desireable = desirability >= 0;
+
+        const newAffectedEmotions: Emotion[] = [];
+        const newCausalEmotions: Emotion[] = [];
+        const feelAboutAffected = (emotionName: string, intensity: number) => newAffectedEmotions.push(new Emotion(emotionName, intensity));
+        const feelAboutCausal = (emotionName: string, intensity: number) => newCausalEmotions.push(new Emotion(emotionName, intensity));
+
+        // Someone else did this to me!
+        if (causalName !== selfName && affectedName === selfName)
+            feelAboutCausal(iLikeCausal ? 'gratitude' : 'anger', Math.abs(utility * deltaLikelihood));
+
+        // This case is not included in TUDelft.Gamygdala.
+        // I caused this event which happened to me
+        if (causalName === selfName && affectedName === selfName)
+            feelAboutCausal(desireable ? "happy-for" : "remorse", Math.abs(utility * deltaLikelihood));
+
+
+        // I did this to someone else
+        if (causalName === selfName && affectedName !== selfName)
         {
-            relation.addEmotion(emotion);
-            agent.updateEmotionalState(emotion);  //also add relation emotion the emotion to the emotional state
+            feelAboutAffected(
+                desireable ?
+                    (iLikeAffected ? "gratification" : "pity") :
+                    (iLikeAffected ? "remorse" : "gloating"),
+                Math.abs(utility * deltaLikelihood * opinionOfAffected)
+            );
         }
-    }
 
-    private agentActions(affectedName: string, causalName: string, selfName: string, desirability: number, utility: number, deltaLikelihood: number)
-    {
-        if (causalName == null || causalName == '')
-            return;
 
-        // If the causal agent is null or empty, then we we assume the event was not caused by an agent.
-        // There are three cases here.
-        // The affected agent is SELF and causal agent is other.
-        // The affected agent is SELF and causal agent is SELF.
-        // The affected agent is OTHER and causal agent is SELF.
-        var emotion = new Emotion(undefined, undefined);
-        let relation;
-        if (affectedName === selfName && selfName != causalName)
+
+        // Someone else did this to another agent or to themself! (We are just a witness)
+        if (causalName !== selfName && affectedName !== selfName)
         {
-            //Case one 
-            emotion.name = desirability >= 0 ? 'gratitude' : 'anger';
-            emotion.intensity = Math.abs(utility * deltaLikelihood);
-            let self = this.getAgentByName(selfName);
-            if (self == null)
-                throw new Error(`Could not find self agent with name ${selfName}`);
+            feelAboutAffected(
+                desireable ?
+                    (iLikeAffected ? "happy-for" : "resentment") :
+                    (iLikeAffected ? "pity" : "gloating"), // TODO: Could we also have 'mockery'?
+                Math.abs(utility * deltaLikelihood * opinionOfAffected)
+            );
 
-            if (self.hasRelationWith(causalName))
-            {
-                relation = self.getRelation(causalName);
-            }
-            else
-            {
-                self.updateRelation(causalName, 0.0);
-                relation = self.getRelation(causalName);
-            }
-
-            if (relation == null)
-                throw new Error(`Could not find relation with causalName ${causalName}`);
-
-            relation.addEmotion(emotion);
-            self.updateEmotionalState(emotion);  //also add relation emotion the emotion to the emotional state
+            if (affectedName !== causalName) // Only evaluate this if the causer didn't do it to themself
+                feelAboutCausal(
+                    desireable ?
+                        (iLikeAffected ? "happy-for" : "resentment") :
+                        (iLikeAffected ? "anger" : "gratitude"),
+                    // The intensity is determined by how we feel about the target
+                    Math.abs(utility * deltaLikelihood * opinionOfAffected)
+                );
         }
-        if (affectedName === selfName && selfName === causalName)
+
+        for (const newEmotion of newCausalEmotions)
         {
-            // Case two
-            // This case is not included in TUDelft.Gamygdala.
-            // This should include pride and shame
+            if (newEmotion.intensity < 0.001)
+                continue;
+            if (causalName !== selfName)
+                relationWithCausal?.addEmotion(newEmotion);
+            me?.updateEmotionalState(newEmotion);
         }
-        if (affectedName != selfName && causalName === selfName)
+
+        for (const newEmotion of newAffectedEmotions)
         {
-            // Case three
-            if (this.getAgentByName(causalName)?.hasRelationWith(affectedName))
-            {
-                let relation = this.getAgentByName(causalName)?.getRelation(affectedName);
+            if (newEmotion.intensity < 0.001)
+                continue;
 
-                if (relation == null)
-                    throw new Error(`Could not find agent by name ${causalName} with relation to ${affectedName} in case three of agentActions`);
-
-                if (desirability >= 0)
-                {
-                    if (relation.like >= 0)
-                    {
-                        emotion.name = 'gratification';
-                        emotion.intensity = Math.abs(utility * deltaLikelihood * relation.like);
-                        relation.addEmotion(emotion);
-                        this.getAgentByName(causalName)?.updateEmotionalState(emotion);  //also add relation emotion the emotion to the emotional state
-                    }
-                }
-                else
-                {
-                    if (relation.like >= 0)
-                    {
-                        emotion.name = 'remorse';
-                        emotion.intensity = Math.abs(utility * deltaLikelihood * relation.like);
-                        relation.addEmotion(emotion);
-                        this.getAgentByName(causalName)?.updateEmotionalState(emotion); // Also add relation emotion the emotion to the emotional state
-                    }
-
-                }
-
-            }
+            if (affectedName !== selfName)
+                relationWithAffected?.addEmotion(newEmotion);
+            me?.updateEmotionalState(newEmotion);
         }
     }
 

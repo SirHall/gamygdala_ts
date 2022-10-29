@@ -8,5 +8,5 @@ export class Emotion
     * @param {String} name The string ref of the emotion
     * @param {double} intensity The intensity at which the emotion is set upon construction.
     */
-    constructor(public name?: string, public intensity?: number) { }
+    constructor(public name: string, public intensity: number) { }
 }
