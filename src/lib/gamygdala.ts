@@ -473,6 +473,9 @@ export class Gamygdala
                     // The intensity is determined by how we feel about the target
                     Math.abs(utility * deltaLikelihood * opinionOfAffected)
                 );
+
+            // Update how I feel about myself as a result
+
         }
 
         for (const newEmotion of newCausalEmotions)
@@ -522,3 +525,5 @@ export const linearDecayFunction: DecayFn = (value, decayFactor, msPassed) => va
  * @method TUDelft.Gamygdala.exponentialDecay 
  */
 export const exponentialDecayFunction: DecayFn = (value, decayFactor, msPassed) => value * Math.pow(decayFactor, msPassed / 1000);
+
+

@@ -35,6 +35,27 @@ export class Agent
             ["anger", [-0.51, 0.59, 0.25]],
             ["gratification", [0.69, 0.57, 0.63]], // Triumphant
             ["remorse", [-0.57, 0.28, -0.34]], // Guilty
+
+            // TODO: Find the PAD values for these
+            // ["pride", [0.61, 0.59, 0.61]], // Proud
+            // ["shame", [-0.61, 0.59, 0.61]], // Embarrassed
+            // ["admiration", [0.61, 0.59, 0.61]], // Admired
+            // ["reproach", [-0.61, 0.59, 0.61]], // Disrespected
+            // ["love", [0.61, 0.59, 0.61]], // Loved
+            // ["loathing", [-0.61, 0.59, 0.61]], // Hated
+            // ["trust", [0.61, 0.59, 0.61]], // Trusted
+            // ["distrust", [-0.61, 0.59, 0.61]], // Betrayed
+            // ["surprise", [0.61, 0.59, 0.61]], // Surprised
+            // ["anticipation", [0.61, 0.59, 0.61]], // Anticipating
+            // ["submission", [0.61, 0.59, 0.61]], // Submissive
+            // ["dominance", [0.61, 0.59, 0.61]], // Dominant
+            // ["acceptance", [0.61, 0.59, 0.61]], // Accepted
+            // ["rejection", [-0.61, 0.59, 0.61]], // Rejected
+            // ["interest", [0.61, 0.59, 0.61]], // Interested
+            // ["boredom", [-0.61, 0.59, 0.61]], // Bored
+            // ["amusement", [0.61, 0.59, 0.61]], // Amused
+            // ["annoyance", [-0.61, 0.59, 0.61]], // Annoyed
+            // ["excitement", [0.61, 0.59, 0.61]], // Excited
         ]
     );
 
