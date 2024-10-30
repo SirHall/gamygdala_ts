@@ -134,7 +134,7 @@ export class Agent
         }
 
         // Copy on keep, we need to maintain a list of current emotions for the state, not a list references to the appraisal engine
-        this.internalState.push(new Emotion(emotion.name, emotion.intensity));
+        this.internalState.push({...emotion});
     }
 
     /**
